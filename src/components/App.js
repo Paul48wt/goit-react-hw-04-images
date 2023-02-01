@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import { useEffect, useState } from 'react';
 import { ToastContainer } from 'react-toastify';
 import { LoadMoreButton } from './Button/Button';
 import { Loader } from './Loader/Loader';
@@ -7,94 +7,83 @@ import { Modal } from './Modal/Modal';
 import { Searchbar } from './Searchbar/Searchbar';
 import { fetchSerchQuery } from 'api/api';
 
-export class App extends Component {
-  state = {
-    searchQuery: '',
-    images: [],
-    showModal: false,
-    page: 1,
-    status: 'idle',
-    url: '',
-    hits: 1,
-  };
-  handleFormSubmit = searchQuery => {
-    this.setState({
-      searchQuery,
-      images: [],
-      page: 1,
-    });
+export function App() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [images, setImages] = useState([]);
+  const [page, setPage] = useState(1);
+  const [status, setStatus] = useState('idle');
+  const [url, setUrl] = useState('');
+  const [hits, setHits] = useState(1);
+  const [showModal, setShowModal] = useState(false);
+
+  const handleFormSubmit = searchQuery => {
+    setSearchQuery(searchQuery);
+    setImages([]);
+    setPage(1);
   };
 
-  toggleModal = e => {
-    this.setState(({ showModal }) => ({ showModal: !showModal }));
+  const toggleModal = () => {
+    setShowModal(!showModal);
   };
 
-  loadMoreHandler = () => {
-    this.setState(prevState => ({
-      page: prevState.page + 1,
-      hits: 1,
-    }));
+  const loadMoreHandler = () => {
+    setHits(1);
+    setPage(prevState => prevState + 1);
   };
 
-  imageForModalHandler = data => {
-    this.setState({ url: data });
+  const imageForModalHandler = data => {
+    setUrl(data);
   };
 
-  async componentDidUpdate(prevProps, prevState) {
-    const { searchQuery, page } = this.state;
+  useEffect(() => {
+    if (searchQuery === '') {
+      return;
+    }
 
-    if (prevState.searchQuery !== searchQuery || prevState.page !== page) {
-      this.setState({ status: 'pending' });
-
+    async function getImages() {
+      setStatus('pending');
       try {
         const response = await fetchSerchQuery(searchQuery, page);
 
-        this.setState(prevState => ({
-          images: [...prevState.images, ...response.hits],
-          status: 'resolved',
-          hits: response.hits.length,
-        }));
-      } catch (error) {}
+        setImages(prevState => prevState.concat(response.hits));
+        setHits(response.hits.length);
+        setStatus('resolved');
+      } catch (error) {
+      } finally {
+      }
     }
-    this.scroll();
-  }
+    getImages();
+  }, [page, searchQuery]);
 
-  scroll = () => {
-    window.scrollTo(
-      0,
-      document.body.scrollHeight || document.documentElement.scrollHeight
-    );
-  };
+  return (
+    <>
+      <Searchbar onSubmit={handleFormSubmit} />
+      {status === 'pending' ? <Loader /> : ''}
+      {status === 'resolved' ? (
+        <ImageGallery
+          imagesArray={images}
+          toggleModal={toggleModal}
+          onImageClick={imageForModalHandler}
+        ></ImageGallery>
+      ) : (
+        ''
+      )}
 
-  render() {
-    const { images, showModal, url, status, hits } = this.state;
-
-    return (
-      <>
-        <Searchbar onSubmit={this.handleFormSubmit} />
-        {status === 'pending' ? <Loader /> : ''}
-        {status === 'resolved' ? (
-          <ImageGallery
-            imagesArray={images}
-            toggleModal={this.toggleModal}
-            onImageClick={this.imageForModalHandler}
-          ></ImageGallery>
+      <div className="ButtonContainer">
+        {hits === 12 && status === 'resolved' ? (
+          <LoadMoreButton onClick={loadMoreHandler} />
         ) : (
           ''
         )}
+      </div>
 
-        <div className="ButtonContainer">
-          {hits === 12 ? <LoadMoreButton onClick={this.loadMoreHandler} /> : ''}
-        </div>
+      {showModal && (
+        <Modal onClose={toggleModal}>
+          <img src={url} alt="" />
+        </Modal>
+      )}
 
-        {showModal && (
-          <Modal onClose={this.toggleModal}>
-            <img src={url} alt="" />
-          </Modal>
-        )}
-
-        <ToastContainer />
-      </>
-    );
-  }
+      <ToastContainer />
+    </>
+  );
 }
